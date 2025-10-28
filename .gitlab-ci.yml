@@ -1,0 +1,131 @@
+image: mcr.microsoft.com/dotnet/sdk:8.0
+
+stages:
+  - build
+  - test
+  - deploy
+
+variables:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+
+# ========================
+# BUILD
+# ========================
+build:
+  stage: build
+  tags:
+    - runner
+  script:
+    - echo "A compilar o projeto em Release..."
+    - dotnet restore levelEstateLDS.sln
+    - dotnet build levelEstateLDS.sln --configuration Release --no-restore
+  artifacts:
+    paths:
+      - "API/bin/Release/"
+      - "API/obj/Release/"
+    expire_in: 1 hour
+
+# ========================
+# TESTES UNITÁRIOS
+# ========================
+unit_tests:
+  stage: test
+  tags:
+    - runner
+  script:
+    - echo "A correr testes unitários..."
+    - dotnet new tool-manifest
+    - dotnet tool install dotnet-reportgenerator-globaltool
+    - dotnet test tests/UnitTests/UnitTests.csproj --configuration Release --logger "junit;LogFilePath=reports/junit/unit-tests.xml" /p:CollectCoverage=true /p:CoverletOutput=reports/coverlet/ /p:CoverletOutputFormat=cobertura
+    - dotnet reportgenerator -reports:"tests/UnitTests/reports/coverlet/**/*.cobertura.xml" -targetdir:"tests/UnitTests/reports/coverage"
+  artifacts:
+    when: always
+    name: "unit-tests-reports"
+    paths:
+      - tests/UnitTests/reports/
+    reports:
+      junit: tests/UnitTests/reports/junit/unit-tests.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: tests/UnitTests/reports/coverlet/coverage.cobertura.xml
+    expire_in: 1 week
+
+# ========================
+# TESTES DE INTEGRAÇÃO
+# ========================
+integration_tests:
+  stage: test
+  tags:
+    - runner
+  script:
+    - echo "A correr testes de integração..."
+    - dotnet new tool-manifest
+    - dotnet tool install dotnet-reportgenerator-globaltool
+    - dotnet test tests/IntegrationTests/IntegrationTests.csproj --configuration Release --logger "junit;LogFilePath=reports/junit/integration-tests.xml" /p:CollectCoverage=true /p:CoverletOutput=reports/coverlet/ /p:CoverletOutputFormat=cobertura
+    - dotnet reportgenerator -reports:"tests/IntegrationTests/reports/coverlet/**/*.cobertura.xml" -targetdir:"tests/IntegrationTests/reports/coverage"
+  artifacts:
+    when: always
+    name: "integration-tests-reports"
+    paths:
+      - tests/IntegrationTests/reports/
+    reports:
+      junit: tests/IntegrationTests/reports/junit/integration-tests.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: tests/IntegrationTests/reports/coverlet/coverage.cobertura.xml
+    expire_in: 1 week
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" || $CI_COMMIT_BRANCH == "master"'
+      when: always
+
+# ========================
+# TESTES DE SISTEMA
+# ========================
+system_tests:
+  stage: test
+  tags:
+    - runner
+  script:
+    - echo "A correr testes de sistema..."
+    - dotnet new tool-manifest
+    - dotnet tool install dotnet-reportgenerator-globaltool
+    - dotnet test tests/SystemTests/SystemTests.csproj --configuration Release --logger "junit;LogFilePath=reports/junit/system-tests.xml" /p:CollectCoverage=true /p:CoverletOutput=reports/coverlet/ /p:CoverletOutputFormat=cobertura
+    - dotnet reportgenerator -reports:"tests/SystemTests/reports/coverlet/**/*.cobertura.xml" -targetdir:"tests/SystemTests/reports/coverage"
+  artifacts:
+    when: always
+    name: "system-tests-reports"
+    paths:
+      - tests/SystemTests/reports/
+    reports:
+      junit: tests/SystemTests/reports/junit/system-tests.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: tests/SystemTests/reports/coverlet/coverage.cobertura.xml
+    expire_in: 1 week
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "master"'
+      when: always
+
+# ========================
+# DEPLOY
+# ========================
+deploy:
+  stage: deploy
+  tags:
+    - runner
+  script:
+    - echo "A fazer deploy da aplicação..."
+    - dotnet restore
+    - dotnet publish API/API.csproj --configuration Release --output ./publish/
+  artifacts:
+    paths:
+      - ./publish/
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "master"'
+      when: always
+  needs:
+    - build
+    - unit_tests
+    - integration_tests
+    - system_tests
