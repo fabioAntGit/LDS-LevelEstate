@@ -1,0 +1,34 @@
+networks:
+    levelestateapp:
+
+services:
+    levelestatesqlserver:
+        container_name: level-estate-sql-server
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        ports:
+            - 8002:1433
+        environment: 
+            - ACCEPT_EULA=Y
+            - SA_PASSWORD=LevelLDS123!
+        networks:
+            - levelestateapp
+    api:
+        container_name: api-level-estate
+        image: ${DOCKER_REGISTRY-}api
+        build:
+            context: .
+            dockerfile: API/Dockerfile
+        ports:
+            - 8080:8080
+            - 8081:8081
+        depends_on:
+            - levelestatesqlserver
+        environment:
+            - DB_HOST=levelestatesqlserver
+            - DB_NAME=LevelEstate
+            - DB_SA_PASSWORD=LevelLDS123!
+        networks:
+            - levelestateapp
+
+
+            
