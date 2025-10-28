@@ -142,16 +142,15 @@ else
 }
 
 // Configure the HTTP request pipeline.
+app.UseSwagger();
+app.UseSwaggerUI();
+
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-
     using (var scope = app.Services.CreateScope())
     {
         var db = scope.ServiceProvider.GetRequiredService<LevelEstateContext>();
-        db.Database.EnsureCreated(); // creates DB if it doesn�t exist and applies migrations
-                                     // or, alternatively: db.Database.EnsureCreated();
+        db.Database.EnsureCreated();
     }
 }
 
